@@ -1,6 +1,6 @@
 {
   "name": "better-swagger-types",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Prisma-like TypeScript type generation for Swagger/OpenAPI schemas",
   "keywords": [
     "openapi",
@@ -16,7 +16,7 @@
   "type": "module",
   "license": "MIT",
   "bin": {
-    "better-swagger-types": "./dist/cli.js"
+    "better-swagger-types": "dist/cli.js"
   },
   "exports": {
     ".": {
