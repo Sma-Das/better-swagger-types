@@ -1,0 +1,48 @@
+{
+  "name": "better-swagger-types",
+  "version": "0.1.0",
+  "description": "Prisma-like TypeScript type generation for Swagger/OpenAPI schemas",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "better-swagger-types": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "bun run typecheck && bun run test"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "cac": "^7.0.0",
+    "chokidar": "^5.0.0",
+    "fast-glob": "^3.3.3",
+    "jiti": "^2.6.1",
+    "openapi-typescript": "^7.13.0",
+    "swagger2openapi": "^7.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
