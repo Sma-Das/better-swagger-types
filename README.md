@@ -2,7 +2,7 @@
 
 Prisma-style TypeScript type generation for Swagger / OpenAPI JSON schemas.
 
-`better-swagger-types` generates stable, ergonomic TypeScript output into `lib/generated` without forcing an HTTP client. The generated code is types-first by default and works well with `fetch`, `axios`, and React Query.
+`better-swagger-types` generates stable, ergonomic TypeScript output into `lib/generated` without forcing an HTTP client. The generated code is types-first by default and works well with `fetch`, `axios`, `swr`, and React Query.
 
 ## Features
 
@@ -151,6 +151,28 @@ type CreateUser = Core.Endpoints['POST /users'];
 
 async function createUser(body: Core.RequestBodyFor<CreateUser>) {
   return axios.post<Core.EndpointSuccessResponseFor<CreateUser>>('/users', body);
+}
+```
+
+### SWR
+
+```ts
+import useSWR from 'swr';
+import type { Core } from './lib/generated';
+
+type GetUser = Core.Endpoints['GET /users/{id}'];
+type GetUserResponse = Core.EndpointSuccessResponseFor<GetUser>;
+
+const fetcher = async (url: string): Promise<GetUserResponse> => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error('Request failed');
+  }
+  return response.json() as Promise<GetUserResponse>;
+};
+
+export function useUser(id: string) {
+  return useSWR(`/users/${id}`, fetcher);
 }
 ```
 
