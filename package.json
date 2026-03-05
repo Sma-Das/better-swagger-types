@@ -2,6 +2,17 @@
   "name": "better-swagger-types",
   "version": "0.1.0",
   "description": "Prisma-like TypeScript type generation for Swagger/OpenAPI schemas",
+  "keywords": [
+    "openapi",
+    "swagger",
+    "typescript",
+    "codegen",
+    "openapi-typescript",
+    "swagger-types",
+    "api-types",
+    "openapi-generator",
+    "typescript-openapi"
+  ],
   "type": "module",
   "license": "MIT",
   "bin": {
