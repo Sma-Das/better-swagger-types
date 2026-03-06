@@ -55,8 +55,7 @@
     "release:check": "bun run check && bun run build && bun run smoke:pack"
   },
   "dependencies": {
-    "@apidevtools/swagger-parser": "^12.1.0",
-    "ajv": "^8.17.1",
+    "@apidevtools/json-schema-ref-parser": "^14.0.1",
     "cac": "^7.0.0",
     "chokidar": "^5.0.0",
     "fast-glob": "^3.3.3",

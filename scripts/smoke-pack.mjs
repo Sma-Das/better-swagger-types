@@ -52,15 +52,15 @@ try {
     'utf8'
   );
 
+  execFileSync('bun', ['add', 'ajv@6.14.0'], {
+    cwd: smokeDir,
+    stdio: 'inherit'
+  });
   execFileSync('bun', ['add', path.join(packDir, packedName)], {
     cwd: smokeDir,
     stdio: 'inherit'
   });
   execFileSync('npx', ['better-swagger-types', 'generate'], {
-    cwd: smokeDir,
-    stdio: 'inherit'
-  });
-  execFileSync('node', ['-p', "require.resolve('ajv/dist/core')"], {
     cwd: smokeDir,
     stdio: 'inherit'
   });

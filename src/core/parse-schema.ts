@@ -1,9 +1,8 @@
-import SwaggerParser from '@apidevtools/swagger-parser';
+import { bundle, type ParserOptions } from '@apidevtools/json-schema-ref-parser';
 import swagger2openapi from 'swagger2openapi';
 
 import type { LoadedSchemaSource, Logger, ParsedSchema } from '../types/internal';
 import { sha256, stableStringify } from '../utils/hash';
-import { isUrl } from '../utils/fs';
 
 interface ParseSchemaOptions {
   resolveRefs: boolean;
@@ -14,40 +13,19 @@ export async function parseSchema(source: LoadedSchemaSource, options: ParseSche
   const rawDocument = parseJson(source.contents, source.source);
   const detectedFormat = detectFormat(rawDocument);
   const actualFormat = resolveFormat(source.format, detectedFormat, source.source);
-  const parserOptions = {
-    resolve: {
-      http: {
-        headers: source.headers
-      }
-    }
-  } as const;
-
-  let normalizedDocument: Record<string, unknown>;
   const warnings: string[] = [];
+  validateSourceDocument(rawDocument, actualFormat, source.source);
 
-  if (actualFormat === 'swagger2') {
-    const converted = isUrl(source.source)
-      ? await swagger2openapi.convertObj(rawDocument, { patch: true, warnOnly: true })
-      : await swagger2openapi.convertFile(source.source, { patch: true, warnOnly: true });
-
-    normalizedDocument = converted.openapi as Record<string, unknown>;
-  } else if (!isUrl(source.source) && source.sourceKind !== 'url') {
-    await SwaggerParser.validate(source.source, parserOptions);
-    normalizedDocument = options.resolveRefs
-      ? (await SwaggerParser.bundle(source.source, parserOptions)) as Record<string, unknown>
+  let normalizedDocument =
+    actualFormat === 'swagger2'
+      ? await convertSwagger2Document(rawDocument, source.source)
       : rawDocument;
-  } else {
-    await SwaggerParser.validate(rawDocument as never, parserOptions);
-    normalizedDocument = options.resolveRefs
-      ? (await SwaggerParser.bundle(rawDocument as never, parserOptions)) as unknown as Record<string, unknown>
-      : rawDocument;
-  }
 
-  if (actualFormat === 'swagger2') {
-    await SwaggerParser.validate(normalizedDocument as never, parserOptions);
-    if (options.resolveRefs) {
-      normalizedDocument = (await SwaggerParser.bundle(normalizedDocument as never, parserOptions)) as unknown as Record<string, unknown>;
-    }
+  validateOpenApi3Document(normalizedDocument, source.source);
+
+  if (options.resolveRefs) {
+    normalizedDocument = await bundleDocument(normalizedDocument, source);
+    validateOpenApi3Document(normalizedDocument, source.source);
   }
 
   options.logger.debug(`Parsed ${source.source} as ${actualFormat}`);
@@ -97,4 +75,79 @@ function resolveFormat(
   }
 
   return configuredFormat;
+}
+
+async function convertSwagger2Document(document: Record<string, unknown>, source: string): Promise<Record<string, unknown>> {
+  try {
+    const converted = await swagger2openapi.convertObj(document, { patch: true, warnOnly: true });
+    return asObject(converted.openapi, `Converted OpenAPI document from ${source}`);
+  } catch (error) {
+    throw new Error(`Failed to convert Swagger 2 schema ${source}: ${getErrorMessage(error)}`);
+  }
+}
+
+async function bundleDocument(document: Record<string, unknown>, source: LoadedSchemaSource): Promise<Record<string, unknown>> {
+  const parserOptions: ParserOptions<Record<string, unknown>> = {
+    continueOnError: false,
+    mutateInputSchema: false,
+    resolve: {
+      external: true,
+      http: {
+        headers: source.headers
+      }
+    }
+  };
+
+  try {
+    return asObject(await bundle(source.source, document, parserOptions), `Bundled OpenAPI document from ${source.source}`);
+  } catch (error) {
+    throw new Error(`Failed to resolve references for ${source.source}: ${getErrorMessage(error)}`);
+  }
+}
+
+function validateSourceDocument(document: Record<string, unknown>, format: 'openapi3' | 'swagger2', source: string): void {
+  if (format === 'swagger2') {
+    assertStringField(document, 'swagger', source);
+    assertObjectField(document, 'info', source);
+    assertObjectField(document, 'paths', source);
+    return;
+  }
+
+  validateOpenApi3Document(document, source);
+}
+
+function validateOpenApi3Document(document: Record<string, unknown>, source: string): void {
+  assertStringField(document, 'openapi', source);
+  assertObjectField(document, 'info', source);
+  assertObjectField(document, 'paths', source);
+}
+
+function assertStringField(document: Record<string, unknown>, field: string, source: string): void {
+  if (typeof document[field] !== 'string') {
+    throw new Error(`Schema ${source} is invalid: expected top-level \`${field}\` to be a string.`);
+  }
+}
+
+function assertObjectField(document: Record<string, unknown>, field: string, source: string): void {
+  const value = document[field];
+
+  if (!isRecord(value)) {
+    throw new Error(`Schema ${source} is invalid: expected top-level \`${field}\` to be an object.`);
+  }
+}
+
+function asObject(value: unknown, label: string): Record<string, unknown> {
+  if (!isRecord(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
 }
