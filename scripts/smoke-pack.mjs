@@ -1,0 +1,73 @@
+import { execFileSync } from 'node:child_process';
+import { access, cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const packDir = await mkdtemp(path.join(os.tmpdir(), 'bst-pack-'));
+const smokeDir = await mkdtemp(path.join(os.tmpdir(), 'bst-smoke-'));
+
+try {
+  const packOutput = execFileSync('npm', ['pack', '--json', '--pack-destination', packDir], {
+    cwd: rootDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit']
+  });
+  const packResult = JSON.parse(packOutput);
+  const packedName = packResult[0]?.filename;
+
+  if (typeof packedName !== 'string' || packedName.length === 0) {
+    throw new Error('Failed to determine packed tarball name.');
+  }
+
+  await writeFile(
+    path.join(smokeDir, 'package.json'),
+    `${JSON.stringify({ name: 'bst-smoke', private: true, type: 'module' }, null, 2)}\n`,
+    'utf8'
+  );
+  await mkdir(path.join(smokeDir, 'schemas'), { recursive: true });
+  await cp(path.join(rootDir, 'examples', 'petstore.json'), path.join(smokeDir, 'schemas', 'core.json'));
+  await writeFile(
+    path.join(smokeDir, 'api.swagger-types.ts'),
+    `export default {
+  output: 'lib/generated',
+  prismaStyleNodeModulesOutput: false,
+  schemas: [
+    {
+      name: 'core',
+      source: './schemas/core.json',
+      namespace: 'Core',
+      format: 'auto'
+    }
+  ],
+  generator: {
+    emitOperations: true,
+    emitSchemas: true,
+    resolveRefs: true,
+    naming: 'stable'
+  }
+};
+`,
+    'utf8'
+  );
+
+  execFileSync('bun', ['add', path.join(packDir, packedName)], {
+    cwd: smokeDir,
+    stdio: 'inherit'
+  });
+  execFileSync('npx', ['better-swagger-types', 'generate'], {
+    cwd: smokeDir,
+    stdio: 'inherit'
+  });
+  execFileSync('node', ['-p', "require.resolve('ajv/dist/core')"], {
+    cwd: smokeDir,
+    stdio: 'inherit'
+  });
+
+  await access(path.join(smokeDir, 'lib', 'generated', 'index.ts'));
+  console.log('Packaged CLI smoke test passed.');
+} finally {
+  await rm(packDir, { recursive: true, force: true });
+  await rm(smokeDir, { recursive: true, force: true });
+}

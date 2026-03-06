@@ -274,3 +274,34 @@ bun run test
 ```
 
 Example schemas live in `examples/`.
+
+## Release Automation
+
+Automated npm publishing is configured through [`deploy.yml`](.github/workflows/deploy.yml).
+
+The workflow is designed for npm trusted publishing via GitHub Actions OIDC:
+
+- publishes only from `v*` git tags
+- requires the GitHub Actions job to obtain an OIDC token
+- uses the GitHub Environment named `release`
+- runs `bun run release:check` before publishing
+- performs a packaged-artifact smoke test before `npm publish`
+
+### One-time setup
+
+1. In GitHub, create an environment named `release`.
+2. In that environment, require at least one reviewer and disable self-review if you want a manual approval gate before publish.
+3. In npm package settings for `better-swagger-types`, configure a trusted publisher for:
+   - owner: `Sma-Das`
+   - repository: `better-swagger-types`
+   - workflow filename: `deploy.yml`
+4. In npm package settings, prefer tokenless publishing by disallowing classic automation tokens once trusted publishing is working.
+
+### Release flow
+
+```bash
+npm version patch
+git push origin main --follow-tags
+```
+
+That pushes a tag such as `v0.1.4`, triggers the deploy workflow, validates the packaged artifact, and publishes to npm if the `release` environment and npm trusted publisher both allow it.
