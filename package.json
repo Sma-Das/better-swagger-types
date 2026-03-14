@@ -37,7 +37,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map"
   ],
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
@@ -47,12 +48,14 @@
   },
   "scripts": {
     "build": "tsup",
+    "bench:generate": "bun scripts/benchmark-generate.mjs",
+    "pack:dry-run": "node scripts/pack-dry-run.mjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "bun run typecheck && bun run test",
-    "release:check": "bun run check && bun run build && bun run smoke:pack"
+    "release:check": "bun run check && bun run build && bun run pack:dry-run && bun run smoke:pack"
   },
   "dependencies": {
     "@apidevtools/json-schema-ref-parser": "^14.0.1",

@@ -7,11 +7,30 @@ import { fileURLToPath } from 'node:url';
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packDir = await mkdtemp(path.join(os.tmpdir(), 'bst-pack-'));
 const smokeDir = await mkdtemp(path.join(os.tmpdir(), 'bst-smoke-'));
+const npmCacheDir = path.join(os.tmpdir(), 'bst-npm-cache');
+const npmLogsDir = path.join(os.tmpdir(), 'bst-npm-logs');
+const bunCacheDir = path.join(os.tmpdir(), 'bst-bun-cache');
+
+await mkdir(npmCacheDir, { recursive: true });
+await mkdir(npmLogsDir, { recursive: true });
+await mkdir(bunCacheDir, { recursive: true });
+
+const npmEnv = {
+  ...process.env,
+  npm_config_cache: npmCacheDir,
+  npm_config_logs_dir: npmLogsDir
+};
+const bunEnv = {
+  ...process.env,
+  TMPDIR: smokeDir,
+  BUN_INSTALL_CACHE_DIR: bunCacheDir
+};
 
 try {
   const packOutput = execFileSync('npm', ['pack', '--json', '--pack-destination', packDir], {
     cwd: rootDir,
     encoding: 'utf8',
+    env: npmEnv,
     stdio: ['ignore', 'pipe', 'inherit']
   });
   const packResult = JSON.parse(packOutput);
@@ -54,10 +73,12 @@ try {
 
   execFileSync('bun', ['add', 'ajv@6.14.0'], {
     cwd: smokeDir,
+    env: bunEnv,
     stdio: 'inherit'
   });
   execFileSync('bun', ['add', path.join(packDir, packedName)], {
     cwd: smokeDir,
+    env: bunEnv,
     stdio: 'inherit'
   });
   execFileSync('npx', ['better-swagger-types', 'generate'], {

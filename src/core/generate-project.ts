@@ -3,10 +3,10 @@ import path from 'node:path';
 import { MANIFEST_FILE, NODE_MODULES_MARKER_DIR } from './constants';
 import { loadSchemaSource } from './load-schema-source';
 import { loadConfig } from './load-config';
-import { readManifest, writeManifest, writeNodeModulesMarker } from './manifest';
+import { buildManifestSchemaEntry, readManifest, writeManifest, writeNodeModulesMarker } from './manifest';
 import { parseSchema } from './parse-schema';
 import { resolveSchemaSources } from './resolve-sources';
-import { emitRootIndexFile, emitSchemaArtifacts } from '../generator/emit-schema-folder';
+import { emitRootIndexFile, emitSchemaArtifacts, getSchemaArtifactPaths } from '../generator/emit-schema-folder';
 import type { GenerateCommandOptions, LoadedConfig, Logger, ParsedSchema } from '../types/internal';
 import { pathExists, removeIfExists } from '../utils/fs';
 import { writeGeneratedFiles } from '../generator/write-output';
@@ -24,6 +24,7 @@ export interface GenerateSummary {
 export async function generateProject(options: GenerateCommandOptions, logger: Logger): Promise<GenerateSummary> {
   const startedAt = Date.now();
   const loadedConfig = await loadConfig(options.config);
+  const previousManifest = await readManifest(loadedConfig);
   const resolvedSources = await resolveSchemaSources(loadedConfig, logger);
   const loadedSources = await Promise.all(
     resolvedSources.map((source) => loadSchemaSource(source, loadedConfig, options.cache ?? true, logger))
@@ -36,25 +37,39 @@ export async function generateProject(options: GenerateCommandOptions, logger: L
       })
     )
   );
-  const artifacts = await Promise.all(parsedSchemas.map((schema) => emitSchemaArtifacts(schema, loadedConfig)));
-  const files = artifacts.flatMap((artifact) => artifact.files);
-  files.push(emitRootIndexFile(parsedSchemas, loadedConfig));
+  const manifestSchemas = parsedSchemas.map((schema) => buildManifestSchemaEntry(schema, loadedConfig));
+  const previousSchemaMap =
+    previousManifest?.version === 2
+      ? new Map(previousManifest.schemas.map((schema) => [schema.name, schema]))
+      : undefined;
+  const changedSchemas = parsedSchemas.filter((schema, index) => {
+    const nextSchema = manifestSchemas[index];
+    if (!nextSchema) {
+      return true;
+    }
 
-  const { written, staleDeleted } = await writeGeneratedFiles(loadedConfig, files, logger);
-  await writeManifest(
+    const previousSchema = previousSchemaMap?.get(nextSchema.name);
+    return !previousSchema || previousSchema.generationKey !== nextSchema.generationKey;
+  });
+  const artifacts = await Promise.all(changedSchemas.map((schema) => emitSchemaArtifacts(schema, loadedConfig)));
+  const filesToWrite = artifacts.flatMap((artifact) => artifact.files);
+  const expectedOutputPaths = parsedSchemas.flatMap((schema) => getSchemaArtifactPaths(schema.source.folderName, loadedConfig));
+  const rootIndexFile = emitRootIndexFile(parsedSchemas, loadedConfig);
+
+  filesToWrite.push(rootIndexFile);
+  expectedOutputPaths.push(rootIndexFile.path);
+
+  const { written, staleDeleted } = await writeGeneratedFiles(
     loadedConfig,
-    files.map((file) => file.path),
-    parsedSchemas.map((schema) => ({
-      name: schema.source.effectiveName,
-      namespace: schema.source.namespace,
-      folderName: schema.source.folderName,
-      source: schema.source.source,
-      schemaHash: schema.schemaHash
-    }))
+    filesToWrite,
+    expectedOutputPaths,
+    logger,
+    previousManifest
   );
+  await writeManifest(loadedConfig, expectedOutputPaths, manifestSchemas, previousManifest);
 
   if (loadedConfig.config.prismaStyleNodeModulesOutput) {
-    await writeNodeModulesMarker(loadedConfig, files.map((file) => file.path));
+    await writeNodeModulesMarker(loadedConfig, expectedOutputPaths);
   } else {
     const markerDir = path.join(loadedConfig.configDir, NODE_MODULES_MARKER_DIR);
     if (await pathExists(markerDir)) {
@@ -65,7 +80,7 @@ export async function generateProject(options: GenerateCommandOptions, logger: L
   return {
     loadedConfig,
     schemaCount: parsedSchemas.length,
-    fileCount: files.length,
+    fileCount: expectedOutputPaths.length,
     writtenCount: written,
     staleDeleted,
     elapsedMs: Date.now() - startedAt,

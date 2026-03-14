@@ -15,11 +15,36 @@ interface OperationDescriptor {
   successCodes: string[];
 }
 
+export function getSchemaArtifactPaths(folderName: string, loadedConfig: LoadedConfig): string[] {
+  const schemaDirectory = path.join(loadedConfig.configDir, loadedConfig.config.output, folderName);
+  const filePaths = [
+    path.join(schemaDirectory, 'paths.ts'),
+    path.join(schemaDirectory, 'meta.ts'),
+    path.join(schemaDirectory, 'index.ts')
+  ];
+
+  if (loadedConfig.config.generator.emitSchemas) {
+    filePaths.push(path.join(schemaDirectory, 'schemas.ts'));
+  }
+
+  if (loadedConfig.config.generator.emitSimpleAliases) {
+    filePaths.push(path.join(schemaDirectory, 'simple.ts'));
+  }
+
+  if (loadedConfig.config.generator.emitOperations) {
+    filePaths.push(path.join(schemaDirectory, 'operations.ts'));
+    filePaths.push(path.join(schemaDirectory, 'endpoints.ts'));
+  }
+
+  return filePaths;
+}
+
 export async function emitSchemaArtifacts(
   parsedSchema: ParsedSchema,
   loadedConfig: LoadedConfig
 ): Promise<GeneratedSchemaArtifacts> {
   const schemaDirectory = path.join(loadedConfig.configDir, loadedConfig.config.output, parsedSchema.source.folderName);
+  const operations = collectOperations(parsedSchema.document);
   const baseTypes = await openapiTS(parsedSchema.document as never, {
     alphabetize: true,
     silent: true,
@@ -58,11 +83,11 @@ export async function emitSchemaArtifacts(
   if (loadedConfig.config.generator.emitOperations) {
     files.push({
       path: path.join(schemaDirectory, 'operations.ts'),
-      contents: emitOperationsFile(parsedSchema)
+      contents: emitOperationsFile(operations)
     });
     files.push({
       path: path.join(schemaDirectory, 'endpoints.ts'),
-      contents: emitEndpointsFile(parsedSchema)
+      contents: emitEndpointsFile(operations)
     });
   }
 
@@ -138,9 +163,7 @@ function emitSchemasFile(parsedSchema: ParsedSchema): string {
   return `${lines.join('\n')}\n`;
 }
 
-function emitOperationsFile(parsedSchema: ParsedSchema): string {
-  const operations = collectOperations(parsedSchema.document);
-
+function emitOperationsFile(operations: OperationDescriptor[]): string {
   const lines = [
     GENERATED_BANNER.trimEnd(),
     `import type { paths } from './paths';`,
@@ -192,24 +215,7 @@ function emitOperationsFile(parsedSchema: ParsedSchema): string {
   return `${lines.join('\n')}\n`;
 }
 
-function emitSimpleAliasesFile(parsedSchema: ParsedSchema): string {
-  const aliases = assignSimplePathAliases(getPathKeys(parsedSchema.document));
-  const lines = [
-    GENERATED_BANNER.trimEnd(),
-    `import type { paths } from './paths';`,
-    ''
-  ];
-
-  for (const entry of aliases) {
-    lines.push(`export type ${entry.alias} = paths[${JSON.stringify(entry.path)}];`);
-  }
-
-  lines.push('');
-  return `${lines.join('\n')}\n`;
-}
-
-function emitEndpointsFile(parsedSchema: ParsedSchema): string {
-  const operations = collectOperations(parsedSchema.document);
+function emitEndpointsFile(operations: OperationDescriptor[]): string {
   const lines = [
     GENERATED_BANNER.trimEnd(),
     `import type { Operations, ResponseFor, SuccessResponseFor } from './operations';`,
@@ -233,6 +239,22 @@ function emitEndpointsFile(parsedSchema: ParsedSchema): string {
   lines.push('export type EndpointSuccessResponseFor<T> = SuccessResponseFor<T>;');
   lines.push('');
 
+  return `${lines.join('\n')}\n`;
+}
+
+function emitSimpleAliasesFile(parsedSchema: ParsedSchema): string {
+  const aliases = assignSimplePathAliases(getPathKeys(parsedSchema.document));
+  const lines = [
+    GENERATED_BANNER.trimEnd(),
+    `import type { paths } from './paths';`,
+    ''
+  ];
+
+  for (const entry of aliases) {
+    lines.push(`export type ${entry.alias} = paths[${JSON.stringify(entry.path)}];`);
+  }
+
+  lines.push('');
   return `${lines.join('\n')}\n`;
 }
 

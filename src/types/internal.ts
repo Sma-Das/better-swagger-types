@@ -52,7 +52,7 @@ export interface GeneratedSchemaArtifacts {
   files: GeneratedFile[];
 }
 
-export interface ManifestSchemaEntry {
+export interface LegacyManifestSchemaEntry {
   name: string;
   namespace: string;
   folderName: string;
@@ -60,8 +60,22 @@ export interface ManifestSchemaEntry {
   schemaHash: string;
 }
 
-export interface Manifest {
+export interface ManifestSchemaEntry extends LegacyManifestSchemaEntry {
+  generationKey: string;
+}
+
+export interface ManifestV1 {
   version: 1;
+  packageName: 'better-swagger-types';
+  generatedAt: string;
+  configPath: string;
+  output: string;
+  files: string[];
+  schemas: LegacyManifestSchemaEntry[];
+}
+
+export interface ManifestV2 {
+  version: 2;
   packageName: 'better-swagger-types';
   generatedAt: string;
   configPath: string;
@@ -69,6 +83,8 @@ export interface Manifest {
   files: string[];
   schemas: ManifestSchemaEntry[];
 }
+
+export type Manifest = ManifestV1 | ManifestV2;
 
 export interface InitOptions {
   configPath: string;
