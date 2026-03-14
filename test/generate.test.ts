@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -27,6 +27,12 @@ async function snapshotDirectory(directory: string): Promise<string> {
   return parts.join('\n');
 }
 
+async function collectFileMtimes(directory: string): Promise<Map<string, number>> {
+  const mtimes = new Map<string, number>();
+  await walkMtimes(directory, directory, mtimes);
+  return mtimes;
+}
+
 async function walk(root: string, current: string, parts: string[]): Promise<void> {
   const entries = (await readdir(current, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name));
   for (const entry of entries) {
@@ -40,6 +46,20 @@ async function walk(root: string, current: string, parts: string[]): Promise<voi
     const contents = await readFile(fullPath, 'utf8');
     parts.push(`>>> ${relativePath}`);
     parts.push(contents.trimEnd());
+  }
+}
+
+async function walkMtimes(root: string, current: string, mtimes: Map<string, number>): Promise<void> {
+  const entries = (await readdir(current, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name));
+  for (const entry of entries) {
+    const fullPath = path.join(current, entry.name);
+    if (entry.isDirectory()) {
+      await walkMtimes(root, fullPath, mtimes);
+      continue;
+    }
+
+    const relativePath = path.relative(root, fullPath).split(path.sep).join('/');
+    mtimes.set(relativePath, (await stat(fullPath)).mtimeMs);
   }
 }
 
@@ -103,6 +123,69 @@ describe('generateProject', () => {
 
     expect(summary.writtenCount).toBe(0);
     expect(secondManifest).toBe(firstManifest);
+  });
+
+  it('rewrites only the changed schema folder in a multi-schema project', async () => {
+    const fixtureDirectory = await createFixtureCopy('multi');
+    const configPath = path.join(fixtureDirectory, 'api.swagger-types.ts');
+    const generatedDirectory = path.join(fixtureDirectory, 'lib/generated');
+    const usersSchemaPath = path.join(fixtureDirectory, 'schemas/users.json');
+
+    await generateProject({ config: configPath, cache: true }, logger);
+    const before = await collectFileMtimes(generatedDirectory);
+
+    const usersSchema = await readFile(usersSchemaPath, 'utf8');
+    await writeFile(usersSchemaPath, usersSchema.replace('"title": "Users API"', '"title": "Users API v2"'), 'utf8');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const summary = await generateProject({ config: configPath, cache: true }, logger);
+    const after = await collectFileMtimes(generatedDirectory);
+    const changedPaths = [...after.entries()]
+      .filter(([relativePath, mtimeMs]) => before.get(relativePath) !== mtimeMs)
+      .map(([relativePath]) => relativePath)
+      .sort((left, right) => left.localeCompare(right));
+
+    expect(summary.writtenCount).toBeGreaterThan(0);
+    expect(changedPaths.length).toBeGreaterThan(0);
+    expect(changedPaths.every((relativePath) => relativePath.startsWith('services-users/'))).toBe(true);
+  });
+
+  it('upgrades a v1 manifest to v2 on the next successful generate', async () => {
+    const fixtureDirectory = await createFixtureCopy('basic');
+    const configPath = path.join(fixtureDirectory, 'api.swagger-types.ts');
+    const manifestPath = path.join(fixtureDirectory, MANIFEST_FILE);
+
+    await generateProject({ config: configPath, cache: true }, logger);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+      version: number;
+      schemas: Array<Record<string, unknown>>;
+    };
+
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify(
+        {
+          ...manifest,
+          version: 1,
+          schemas: manifest.schemas.map(({ generationKey: _generationKey, ...schema }) => schema)
+        },
+        null,
+        2
+      )}\n`,
+      'utf8'
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const summary = await generateProject({ config: configPath, cache: true }, logger);
+    const upgradedManifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+      version: number;
+      schemas: Array<{ generationKey?: string }>;
+    };
+
+    expect(summary.writtenCount).toBe(0);
+    expect(upgradedManifest.version).toBe(2);
+    expect(upgradedManifest.schemas.every((schema) => typeof schema.generationKey === 'string')).toBe(true);
   });
 });
 

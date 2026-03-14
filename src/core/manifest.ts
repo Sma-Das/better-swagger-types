@@ -2,8 +2,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { MANIFEST_FILE, NODE_MODULES_MARKER_DIR } from './constants';
-import type { LoadedConfig, Manifest, ManifestSchemaEntry } from '../types/internal';
+import type { LoadedConfig, Manifest, ManifestSchemaEntry, ParsedSchema } from '../types/internal';
 import { ensureDir, pathExists, toPosixPath, writeIfChanged } from '../utils/fs';
+import { sha256, stableStringify } from '../utils/hash';
 
 export async function readManifest(loadedConfig: LoadedConfig): Promise<Manifest | undefined> {
   const manifestPath = path.join(loadedConfig.configDir, MANIFEST_FILE);
@@ -23,7 +24,7 @@ export async function writeManifest(
   const manifestPath = path.join(loadedConfig.configDir, MANIFEST_FILE);
   await ensureDir(path.dirname(manifestPath));
 
-  const manifest = buildManifest(loadedConfig, outputFiles, schemas, previousManifest?.generatedAt);
+  const manifest = buildManifest(loadedConfig, outputFiles, schemas);
   if (previousManifest && manifestsMatch(previousManifest, manifest)) {
     return { manifest: previousManifest, written: false };
   }
@@ -46,16 +47,34 @@ export async function writeNodeModulesMarker(loadedConfig: LoadedConfig, outputF
   return markerPath;
 }
 
+export function buildManifestSchemaEntry(parsedSchema: ParsedSchema, loadedConfig: LoadedConfig): ManifestSchemaEntry {
+  return {
+    name: parsedSchema.source.effectiveName,
+    namespace: parsedSchema.source.namespace,
+    folderName: parsedSchema.source.folderName,
+    source: parsedSchema.source.source,
+    schemaHash: parsedSchema.schemaHash,
+    generationKey: sha256(
+      stableStringify({
+        schemaHash: parsedSchema.schemaHash,
+        effectiveName: parsedSchema.source.effectiveName,
+        namespace: parsedSchema.source.namespace,
+        folderName: parsedSchema.source.folderName,
+        generator: loadedConfig.config.generator
+      })
+    )
+  };
+}
+
 function buildManifest(
   loadedConfig: LoadedConfig,
   outputFiles: string[],
-  schemas: ManifestSchemaEntry[],
-  generatedAt?: string
+  schemas: ManifestSchemaEntry[]
 ): Manifest {
   return {
-    version: 1,
+    version: 2,
     packageName: 'better-swagger-types',
-    generatedAt: generatedAt ?? new Date().toISOString(),
+    generatedAt: new Date().toISOString(),
     configPath: toPosixPath(path.relative(loadedConfig.configDir, loadedConfig.configPath) || path.basename(loadedConfig.configPath)),
     output: loadedConfig.config.output,
     files: outputFiles

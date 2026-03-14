@@ -15,6 +15,26 @@ interface OperationDescriptor {
   successCodes: string[];
 }
 
+export function getSchemaArtifactPaths(folderName: string, loadedConfig: LoadedConfig): string[] {
+  const schemaDirectory = path.join(loadedConfig.configDir, loadedConfig.config.output, folderName);
+  const filePaths = [
+    path.join(schemaDirectory, 'paths.ts'),
+    path.join(schemaDirectory, 'meta.ts'),
+    path.join(schemaDirectory, 'index.ts')
+  ];
+
+  if (loadedConfig.config.generator.emitSchemas) {
+    filePaths.push(path.join(schemaDirectory, 'schemas.ts'));
+  }
+
+  if (loadedConfig.config.generator.emitOperations) {
+    filePaths.push(path.join(schemaDirectory, 'operations.ts'));
+    filePaths.push(path.join(schemaDirectory, 'endpoints.ts'));
+  }
+
+  return filePaths;
+}
+
 export async function emitSchemaArtifacts(
   parsedSchema: ParsedSchema,
   loadedConfig: LoadedConfig

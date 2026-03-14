@@ -40,3 +40,31 @@
 - Introduce manifest v2 with a per-schema `generationKey`.
 - After parsing current schemas, skip `emitSchemaArtifacts` for unchanged schemas while still computing the full expected file list for stale cleanup.
 - Add tests that prove only the changed schema folder rewrites in multi-schema configs and that v1 manifests upgrade cleanly.
+
+## Pass 2
+### Changes
+- Upgraded the internal manifest to v2 and added a per-schema `generationKey` derived from schema hash, schema identity, and normalized generator options.
+- Kept manifest v1 readable, but treated it as an incremental-cache miss so the next successful run rewrites it as v2.
+- Changed `generateProject` to parse all schemas, emit artifacts only for schemas whose `generationKey` changed, and still compute the full expected output path set for stale cleanup and manifest writing.
+- Added an artifact-path helper so unchanged schemas can skip emission without risking stale-file deletion.
+- Added regression coverage for single-schema rewrites in multi-schema projects and for v1-to-v2 manifest upgrades.
+
+### Measurements
+- `bun run check`: passed, vitest duration 547ms
+- `bun run build`: ESM 63ms, DTS 550ms
+- `bun run bench:generate`:
+  - `basic`: avg 6.74ms, cold 29.44ms, warm 0.55ms
+  - `multi`: avg 2.20ms, cold 6.53ms, warm 0.86ms
+- `npm_config_cache=/tmp/bst-npm-cache npm_config_logs_dir=/tmp/bst-npm-logs npm pack --json --dry-run`:
+  - tarball size 38352 bytes
+  - unpacked size 167232 bytes
+  - entry count 12
+
+### Risks
+- Incremental skipping currently starts after parsing; parse time still dominates if schemas become very large.
+- Warm benchmark variance is now mostly from process/runtime overhead because the tracked fixtures are small.
+
+### Next Pass
+- Parallelize content writes while keeping stale deletion sequential and deterministic in the logs.
+- Trim package size by excluding published sourcemaps, then add a dedicated pack dry-run script and wire it into release validation.
+- Re-run the full measurement set and close the log with final numbers plus any remaining bottlenecks.

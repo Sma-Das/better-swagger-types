@@ -7,14 +7,15 @@ import { removeEmptyDirectories, removeIfExists, writeIfChanged } from '../utils
 
 export async function writeGeneratedFiles(
   loadedConfig: LoadedConfig,
-  files: GeneratedFile[],
+  filesToWrite: GeneratedFile[],
+  expectedOutputPaths: string[],
   logger: Logger,
   previousManifest?: Manifest
 ): Promise<{ written: number; staleDeleted: number }> {
   let written = 0;
-  const nextPaths = new Set(files.map((file) => path.resolve(file.path)));
+  const nextPaths = new Set(expectedOutputPaths.map((filePath) => path.resolve(filePath)));
 
-  for (const file of files) {
+  for (const file of filesToWrite) {
     const changed = await writeIfChanged(file.path, file.contents);
     if (changed) {
       written += 1;
