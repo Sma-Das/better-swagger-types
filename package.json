@@ -1,6 +1,6 @@
 {
   "name": "better-swagger-types",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Prisma-like TypeScript type generation for Swagger/OpenAPI schemas",
   "homepage": "https://github.com/Sma-Das/better-swagger-types",
   "bugs": {
