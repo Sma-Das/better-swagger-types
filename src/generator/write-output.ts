@@ -2,16 +2,16 @@ import path from 'node:path';
 
 import { NODE_MODULES_MARKER_DIR } from '../core/constants';
 import { readManifest } from '../core/manifest';
-import type { GeneratedFile, LoadedConfig, Logger } from '../types/internal';
+import type { GeneratedFile, LoadedConfig, Logger, Manifest } from '../types/internal';
 import { removeEmptyDirectories, removeIfExists, writeIfChanged } from '../utils/fs';
 
 export async function writeGeneratedFiles(
   loadedConfig: LoadedConfig,
   files: GeneratedFile[],
-  logger: Logger
+  logger: Logger,
+  previousManifest?: Manifest
 ): Promise<{ written: number; staleDeleted: number }> {
   let written = 0;
-  const previousManifest = await readManifest(loadedConfig);
   const nextPaths = new Set(files.map((file) => path.resolve(file.path)));
 
   for (const file of files) {

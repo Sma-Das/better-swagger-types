@@ -20,6 +20,7 @@ export async function emitSchemaArtifacts(
   loadedConfig: LoadedConfig
 ): Promise<GeneratedSchemaArtifacts> {
   const schemaDirectory = path.join(loadedConfig.configDir, loadedConfig.config.output, parsedSchema.source.folderName);
+  const operations = collectOperations(parsedSchema.document);
   const baseTypes = await openapiTS(parsedSchema.document as never, {
     alphabetize: true,
     silent: true,
@@ -51,11 +52,11 @@ export async function emitSchemaArtifacts(
   if (loadedConfig.config.generator.emitOperations) {
     files.push({
       path: path.join(schemaDirectory, 'operations.ts'),
-      contents: emitOperationsFile(parsedSchema)
+      contents: emitOperationsFile(operations)
     });
     files.push({
       path: path.join(schemaDirectory, 'endpoints.ts'),
-      contents: emitEndpointsFile(parsedSchema)
+      contents: emitEndpointsFile(operations)
     });
   }
 
@@ -127,9 +128,7 @@ function emitSchemasFile(parsedSchema: ParsedSchema): string {
   return `${lines.join('\n')}\n`;
 }
 
-function emitOperationsFile(parsedSchema: ParsedSchema): string {
-  const operations = collectOperations(parsedSchema.document);
-
+function emitOperationsFile(operations: OperationDescriptor[]): string {
   const lines = [
     GENERATED_BANNER.trimEnd(),
     `import type { paths } from './paths';`,
@@ -181,8 +180,7 @@ function emitOperationsFile(parsedSchema: ParsedSchema): string {
   return `${lines.join('\n')}\n`;
 }
 
-function emitEndpointsFile(parsedSchema: ParsedSchema): string {
-  const operations = collectOperations(parsedSchema.document);
+function emitEndpointsFile(operations: OperationDescriptor[]): string {
   const lines = [
     GENERATED_BANNER.trimEnd(),
     `import type { Operations, ResponseFor, SuccessResponseFor } from './operations';`,

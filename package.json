@@ -47,6 +47,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "bench:generate": "bun scripts/benchmark-generate.mjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

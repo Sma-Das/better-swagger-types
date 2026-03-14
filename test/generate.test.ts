@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { runClean } from '../src/commands/clean';
+import { MANIFEST_FILE } from '../src/core/constants';
 import { generateProject } from '../src/core/generate-project';
 import { fetchWithCache } from '../src/core/fetch-cache';
 import { createLogger } from '../src/utils/log';
@@ -85,6 +86,23 @@ describe('generateProject', () => {
 
     const generatedDirectory = path.join(fixtureDirectory, 'lib/generated');
     await expect(readFile(path.join(generatedDirectory, 'index.ts'), 'utf8')).rejects.toThrow();
+  });
+
+  it('does not rewrite generated files or the manifest on an unchanged rerun', async () => {
+    const fixtureDirectory = await createFixtureCopy('basic');
+    const configPath = path.join(fixtureDirectory, 'api.swagger-types.ts');
+
+    await generateProject({ config: configPath, cache: true }, logger);
+    const manifestPath = path.join(fixtureDirectory, MANIFEST_FILE);
+    const firstManifest = await readFile(manifestPath, 'utf8');
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const summary = await generateProject({ config: configPath, cache: true }, logger);
+    const secondManifest = await readFile(manifestPath, 'utf8');
+
+    expect(summary.writtenCount).toBe(0);
+    expect(secondManifest).toBe(firstManifest);
   });
 });
 

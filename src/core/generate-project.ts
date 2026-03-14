@@ -24,6 +24,7 @@ export interface GenerateSummary {
 export async function generateProject(options: GenerateCommandOptions, logger: Logger): Promise<GenerateSummary> {
   const startedAt = Date.now();
   const loadedConfig = await loadConfig(options.config);
+  const previousManifest = await readManifest(loadedConfig);
   const resolvedSources = await resolveSchemaSources(loadedConfig, logger);
   const loadedSources = await Promise.all(
     resolvedSources.map((source) => loadSchemaSource(source, loadedConfig, options.cache ?? true, logger))
@@ -40,7 +41,7 @@ export async function generateProject(options: GenerateCommandOptions, logger: L
   const files = artifacts.flatMap((artifact) => artifact.files);
   files.push(emitRootIndexFile(parsedSchemas, loadedConfig));
 
-  const { written, staleDeleted } = await writeGeneratedFiles(loadedConfig, files, logger);
+  const { written, staleDeleted } = await writeGeneratedFiles(loadedConfig, files, logger, previousManifest);
   await writeManifest(
     loadedConfig,
     files.map((file) => file.path),
@@ -50,7 +51,8 @@ export async function generateProject(options: GenerateCommandOptions, logger: L
       folderName: schema.source.folderName,
       source: schema.source.source,
       schemaHash: schema.schemaHash
-    }))
+    })),
+    previousManifest
   );
 
   if (loadedConfig.config.prismaStyleNodeModulesOutput) {
