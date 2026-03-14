@@ -67,3 +67,55 @@ export function buildOperationFallbackName(method: string, routePath: string): s
   const base = `${toPascalCase(method)}${segments || 'Root'}`;
   return sanitizeIdentifier(base);
 }
+
+export function buildSimplePathAliasBase(routePath: string): string {
+  const groups: Array<{ base: string; modifiers: string[] }> = [];
+
+  for (const segment of routePath.split('/').filter(Boolean)) {
+    const parameterName = getPathParameterName(segment);
+    if (parameterName) {
+      const modifier = `By${formatSimpleAliasSegment(parameterName)}`;
+      const currentGroup = groups[groups.length - 1];
+      if (currentGroup) {
+        currentGroup.modifiers.push(modifier);
+      } else {
+        groups.push({ base: 'Root', modifiers: [modifier] });
+      }
+      continue;
+    }
+
+    groups.push({
+      base: formatSimpleAliasSegment(segment),
+      modifiers: []
+    });
+  }
+
+  const alias = (groups.length > 0 ? groups : [{ base: 'Root', modifiers: [] }])
+    .slice()
+    .reverse()
+    .map((group) => `${group.base}${group.modifiers.join('')}`)
+    .join('');
+
+  return alias.endsWith('API') ? alias : `${alias}API`;
+}
+
+function getPathParameterName(segment: string): string | undefined {
+  if (segment.startsWith('{') && segment.endsWith('}')) {
+    const parameterName = segment.slice(1, -1).trim();
+    return parameterName || undefined;
+  }
+
+  return undefined;
+}
+
+function formatSimpleAliasSegment(segment: string): string {
+  if (/^api$/i.test(segment)) {
+    return 'API';
+  }
+
+  if (/^v\d+$/i.test(segment)) {
+    return `V${segment.slice(1)}`;
+  }
+
+  return toPascalCase(segment);
+}

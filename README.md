@@ -11,7 +11,8 @@ Prisma-style TypeScript type generation for Swagger / OpenAPI JSON schemas.
 - Local file, directory, glob, and remote URL schema sources
 - OpenAPI v3 and Swagger v2 support
 - Deterministic output with stable operation naming
-- Generated `paths`, `schemas`, `operations`, `endpoints`, and `meta` files
+- Optional simple path aliases such as `HereTooSomethingHereV1API`
+- Generated `paths`, `schemas`, `simple`, `operations`, `endpoints`, and `meta` files
 - Optional watch mode and clean command
 - No runtime dependency required in generated files
 
@@ -81,6 +82,7 @@ export default defineConfig({
   generator: {
     emitOperations: true,
     emitSchemas: true,
+    emitSimpleAliases: false,
     resolveRefs: true,
     naming: 'stable'
   }
@@ -99,6 +101,7 @@ export default defineConfig({
 - `schemas[].namespace`: optional TS namespace override
 - `generator.emitOperations`: emit `operations.ts` and `endpoints.ts`
 - `generator.emitSchemas`: emit `schemas.ts`
+- `generator.emitSimpleAliases`: emit path-derived aliases in `simple.ts`
 - `generator.resolveRefs`: validate and bundle refs when possible
 - `generator.naming`: currently supports `stable`
 
@@ -111,6 +114,7 @@ lib/generated/
     index.ts
     paths.ts
     schemas.ts
+    simple.ts      # when emitSimpleAliases is true
     operations.ts
     endpoints.ts
     meta.ts
@@ -120,9 +124,21 @@ Generated files include:
 
 - `paths.ts`: OpenAPI-style `paths` mapping plus canonical component types
 - `schemas.ts`: schema component aliases such as `User` and `CreateUserInput`
+- `simple.ts`: optional path-derived aliases such as `UsersByIdAPI` and `HereTooSomethingHereV1API`
 - `operations.ts`: operation-level ergonomic mapping keyed by stable names
 - `endpoints.ts`: endpoint mapping keyed by `"METHOD /path"`
 - `meta.ts`: deterministic metadata including schema hash
+
+### Simple Path Aliases
+
+Enable `generator.emitSimpleAliases` to emit a `simple.ts` file with path item aliases derived from route paths.
+
+```ts
+import type { Simple } from './lib/generated';
+
+type UsersByIdAPI = Simple.UsersByIdAPI;
+type HereTooSomethingHereV1API = Simple.HereTooSomethingHereV1API;
+```
 
 ## Usage Examples
 

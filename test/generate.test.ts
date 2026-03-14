@@ -76,6 +76,62 @@ describe('generateProject', () => {
     expect(rootIndex).toContain("export * as ServicesUsers");
   });
 
+  it('generates simple path aliases when enabled', async () => {
+    const fixtureDirectory = await createFixtureCopy('simple');
+    const configPath = path.join(fixtureDirectory, 'api.swagger-types.ts');
+
+    const summary = await generateProject({ config: configPath, cache: true }, logger);
+    expect(summary.schemaCount).toBe(1);
+    expect(summary.fileCount).toBe(8);
+
+    const output = await snapshotDirectory(path.join(fixtureDirectory, 'lib/generated'));
+    expect(output).toMatchSnapshot();
+  });
+
+  it('emits simple aliases even when operation output is disabled', async () => {
+    const fixtureDirectory = await createFixtureCopy('simple');
+    const configPath = path.join(fixtureDirectory, 'api.swagger-types.ts');
+
+    await writeFile(
+      configPath,
+      `export default {
+  output: 'lib/generated',
+  prismaStyleNodeModulesOutput: false,
+  schemas: [
+    {
+      name: 'simple',
+      source: './schemas/simple.json',
+      namespace: 'Simple',
+      format: 'auto'
+    }
+  ],
+  generator: {
+    emitOperations: false,
+    emitSchemas: true,
+    emitSimpleAliases: true,
+    resolveRefs: true,
+    naming: 'stable'
+  }
+};
+`,
+      'utf8'
+    );
+
+    const summary = await generateProject({ config: configPath, cache: true }, logger);
+    expect(summary.fileCount).toBe(6);
+
+    const schemaIndex = await readFile(path.join(fixtureDirectory, 'lib/generated/simple/index.ts'), 'utf8');
+    expect(schemaIndex).toContain("export * from './simple';");
+    expect(schemaIndex).not.toContain("export * from './operations';");
+    expect(schemaIndex).not.toContain("export * from './endpoints';");
+
+    const simpleAliases = await readFile(path.join(fixtureDirectory, 'lib/generated/simple/simple.ts'), 'utf8');
+    expect(simpleAliases).toContain('export type HereTooSomethingHereV1API = paths["/api/v1/something-here/here_too"];');
+    expect(simpleAliases).toContain('export type UsersByIdAPI = paths["/users/{id}"];');
+
+    await expect(readFile(path.join(fixtureDirectory, 'lib/generated/simple/operations.ts'), 'utf8')).rejects.toThrow();
+  });
+
   it('cleans generated output via the manifest', async () => {
     const fixtureDirectory = await createFixtureCopy('basic');
     const configPath = path.join(fixtureDirectory, 'api.swagger-types.ts');
@@ -102,6 +158,7 @@ describe('fetchWithCache', () => {
         generator: {
           emitOperations: true,
           emitSchemas: true,
+          emitSimpleAliases: false,
           resolveRefs: true,
           naming: 'stable'
         }

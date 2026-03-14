@@ -73,6 +73,9 @@ export default defineConfig({
     // Emit schema component aliases. Default: true.
     emitSchemas: true,
 
+    // Emit simple path-derived aliases like UsersByIdAPI. Default: false.
+    emitSimpleAliases: false,
+
     // Resolve refs through validation/bundling. Default: true.
     resolveRefs: true,
 

@@ -3,7 +3,7 @@ import path from 'node:path';
 import openapiTS, { astToString } from 'openapi-typescript';
 
 import { GENERATED_BANNER, HTTP_METHOD_ORDER } from '../core/constants';
-import { sanitizeIdentifier } from './naming';
+import { buildOperationFallbackName, buildSimplePathAliasBase, sanitizeIdentifier } from './naming';
 import type { GeneratedFile, GeneratedSchemaArtifacts, LoadedConfig, ParsedSchema } from '../types/internal';
 import { toPosixPath } from '../utils/fs';
 
@@ -48,6 +48,13 @@ export async function emitSchemaArtifacts(
     });
   }
 
+  if (loadedConfig.config.generator.emitSimpleAliases) {
+    files.push({
+      path: path.join(schemaDirectory, 'simple.ts'),
+      contents: emitSimpleAliasesFile(parsedSchema)
+    });
+  }
+
   if (loadedConfig.config.generator.emitOperations) {
     files.push({
       path: path.join(schemaDirectory, 'operations.ts'),
@@ -87,6 +94,10 @@ function emitSchemaIndexFile(loadedConfig: LoadedConfig): string {
 
   if (loadedConfig.config.generator.emitSchemas) {
     lines.push(`export * from './schemas';`);
+  }
+
+  if (loadedConfig.config.generator.emitSimpleAliases) {
+    lines.push(`export * from './simple';`);
   }
 
   if (loadedConfig.config.generator.emitOperations) {
@@ -181,6 +192,22 @@ function emitOperationsFile(parsedSchema: ParsedSchema): string {
   return `${lines.join('\n')}\n`;
 }
 
+function emitSimpleAliasesFile(parsedSchema: ParsedSchema): string {
+  const aliases = assignSimplePathAliases(getPathKeys(parsedSchema.document));
+  const lines = [
+    GENERATED_BANNER.trimEnd(),
+    `import type { paths } from './paths';`,
+    ''
+  ];
+
+  for (const entry of aliases) {
+    lines.push(`export type ${entry.alias} = paths[${JSON.stringify(entry.path)}];`);
+  }
+
+  lines.push('');
+  return `${lines.join('\n')}\n`;
+}
+
 function emitEndpointsFile(parsedSchema: ParsedSchema): string {
   const operations = collectOperations(parsedSchema.document);
   const lines = [
@@ -258,6 +285,38 @@ function assignStableAliases(keys: string[]): Map<string, string> {
   return aliases;
 }
 
+function assignSimplePathAliases(pathKeys: string[]): Array<{ path: string; alias: string }> {
+  const grouped = new Map<string, string[]>();
+  for (const pathKey of pathKeys) {
+    const candidate = buildSimplePathAliasBase(pathKey);
+    const bucket = grouped.get(candidate) ?? [];
+    bucket.push(pathKey);
+    grouped.set(candidate, bucket);
+  }
+
+  const aliases: Array<{ path: string; alias: string }> = [];
+  for (const [candidate, originals] of grouped.entries()) {
+    originals.sort((left, right) => left.localeCompare(right));
+    for (const [index, original] of originals.entries()) {
+      aliases.push({
+        path: original,
+        alias: index === 0 ? candidate : `${candidate}${index + 1}`
+      });
+    }
+  }
+
+  return aliases.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function getPathKeys(document: Record<string, unknown>): string[] {
+  const value = document.paths;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return [];
+  }
+
+  return Object.keys(value as Record<string, unknown>).sort((left, right) => left.localeCompare(right));
+}
+
 function collectOperations(document: Record<string, unknown>): OperationDescriptor[] {
   const pathsObject = ((document.paths ?? {}) as Record<string, Record<string, Record<string, unknown>>>) ?? {};
   const pending: Array<Omit<OperationDescriptor, 'typeName'> & { requestedName: string }> = [];
@@ -273,7 +332,7 @@ function collectOperations(document: Record<string, unknown>): OperationDescript
       const operationId = typeof operation.operationId === 'string' && operation.operationId.trim() !== ''
         ? sanitizeIdentifier(operation.operationId)
         : undefined;
-      const requestedName = operationId ?? sanitizeIdentifier(buildFallbackOperationName(method, routePath));
+      const requestedName = operationId ?? buildOperationFallbackName(method, routePath);
       const responses = operation.responses as Record<string, unknown> | undefined;
       const successCodes = Object.keys(responses ?? {})
         .filter((status) => /^2\d\d$/.test(String(status)))
@@ -312,19 +371,4 @@ function collectOperations(document: Record<string, unknown>): OperationDescript
 
   operations.sort((left, right) => `${left.method} ${left.path}`.localeCompare(`${right.method} ${right.path}`));
   return operations;
-}
-
-function buildFallbackOperationName(method: string, routePath: string): string {
-  const segments = routePath
-    .split('/')
-    .filter(Boolean)
-    .map((segment) => {
-      if (segment.startsWith('{') && segment.endsWith('}')) {
-        return `By${sanitizeIdentifier(segment.slice(1, -1))}`;
-      }
-      return sanitizeIdentifier(segment);
-    })
-    .join('');
-
-  return `${sanitizeIdentifier(method)}${segments || 'Root'}`;
 }

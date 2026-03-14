@@ -11,6 +11,7 @@ export interface SchemaSourceConfig {
 export interface GeneratorConfig {
   emitOperations?: boolean;
   emitSchemas?: boolean;
+  emitSimpleAliases?: boolean;
   resolveRefs?: boolean;
   naming?: 'stable';
 }
@@ -25,6 +26,7 @@ export interface BetterSwaggerTypesConfig {
 export interface NormalizedGeneratorConfig {
   emitOperations: boolean;
   emitSchemas: boolean;
+  emitSimpleAliases: boolean;
   resolveRefs: boolean;
   naming: 'stable';
 }
@@ -39,6 +41,7 @@ export interface NormalizedConfig {
 export const DEFAULT_GENERATOR_CONFIG: NormalizedGeneratorConfig = {
   emitOperations: true,
   emitSchemas: true,
+  emitSimpleAliases: false,
   resolveRefs: true,
   naming: 'stable'
 };
@@ -51,6 +54,7 @@ export function normalizeConfig(config: BetterSwaggerTypesConfig): NormalizedCon
     generator: {
       emitOperations: config.generator?.emitOperations ?? DEFAULT_GENERATOR_CONFIG.emitOperations,
       emitSchemas: config.generator?.emitSchemas ?? DEFAULT_GENERATOR_CONFIG.emitSchemas,
+      emitSimpleAliases: config.generator?.emitSimpleAliases ?? DEFAULT_GENERATOR_CONFIG.emitSimpleAliases,
       resolveRefs: config.generator?.resolveRefs ?? DEFAULT_GENERATOR_CONFIG.resolveRefs,
       naming: config.generator?.naming ?? DEFAULT_GENERATOR_CONFIG.naming
     }

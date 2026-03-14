@@ -88,6 +88,10 @@ function validateConfig(config: BetterSwaggerTypesConfig, resolvedPath: string):
       throw new Error('Config generator.emitSchemas must be a boolean when provided.');
     }
 
+    if (config.generator.emitSimpleAliases !== undefined && typeof config.generator.emitSimpleAliases !== 'boolean') {
+      throw new Error('Config generator.emitSimpleAliases must be a boolean when provided.');
+    }
+
     if (config.generator.resolveRefs !== undefined && typeof config.generator.resolveRefs !== 'boolean') {
       throw new Error('Config generator.resolveRefs must be a boolean when provided.');
     }
