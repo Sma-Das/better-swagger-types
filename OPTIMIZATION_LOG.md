@@ -68,3 +68,32 @@
 - Parallelize content writes while keeping stale deletion sequential and deterministic in the logs.
 - Trim package size by excluding published sourcemaps, then add a dedicated pack dry-run script and wire it into release validation.
 - Re-run the full measurement set and close the log with final numbers plus any remaining bottlenecks.
+
+## Pass 3
+### Changes
+- Parallelized generated-file writes with `Promise.all` while preserving deterministic debug logging order and keeping stale deletion sequential.
+- Added `scripts/pack-dry-run.mjs` plus `bun run pack:dry-run`, and made it fail if any published `.map` files remain.
+- Excluded `dist/**/*.map` from the published package by tightening the package `files` whitelist.
+- Updated `release:check` to run the dry-run pack validation before smoke-pack.
+- Hardened `scripts/smoke-pack.mjs` to use temporary npm and bun cache/temp directories so the release check does not depend on a healthy global cache.
+
+### Measurements
+- `bun run check`: passed, vitest duration 652ms during the final `release:check`
+- `bun run build`: ESM 63ms, DTS 562ms during the final `release:check`
+- `bun run bench:generate`:
+  - `basic`: avg 4.79ms, cold 21.71ms, warm 0.42ms
+  - `multi`: avg 1.28ms, cold 4.29ms, warm 0.46ms
+- `bun run pack:dry-run`:
+  - tarball size 15342 bytes
+  - unpacked size 58975 bytes
+  - entry count 9
+- `bun run release:check`: passed after allowing the smoke-pack dependency install to use the network
+
+### Final Comparison
+- Warm `basic` reruns improved from 4.06ms to 0.42ms.
+- Warm `multi` reruns improved from 5.19ms to 0.46ms.
+- Published tarball size dropped from 36492 bytes to 15342 bytes by removing sourcemaps.
+- The release path is now self-checking for sourcemaps and isolated from the broken global npm cache.
+
+### Remaining Notes
+- Incremental work still parses every schema before deciding whether to emit; large-schema improvements beyond this point should target parse/ref-resolution cost.

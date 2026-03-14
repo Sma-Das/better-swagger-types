@@ -14,9 +14,14 @@ export async function writeGeneratedFiles(
 ): Promise<{ written: number; staleDeleted: number }> {
   let written = 0;
   const nextPaths = new Set(expectedOutputPaths.map((filePath) => path.resolve(filePath)));
+  const writeResults = await Promise.all(
+    filesToWrite.map(async (file) => ({
+      file,
+      changed: await writeIfChanged(file.path, file.contents)
+    }))
+  );
 
-  for (const file of filesToWrite) {
-    const changed = await writeIfChanged(file.path, file.contents);
+  for (const { file, changed } of writeResults) {
     if (changed) {
       written += 1;
       logger.debug(`Wrote ${path.relative(process.cwd(), file.path)}`);
